@@ -82,7 +82,7 @@ class AGOL:
         """Export a single feature layer from ArcGIS Online and saves it in a File Geodatabase"""
 
         service = ''.join(e for e in name if e.isalnum())
-        gdb_name = 'export_' + service + '.gdb'
+        gdb_name = 'export_' + service[:25] + '.gdb'
 
         service_folder = os.path.join(save_loc, name)
         os.makedirs(service_folder)
@@ -97,14 +97,15 @@ class AGOL:
         params_query = dict(token=self.token['token'],
                             f='json',
                             outFields='*',
-                            where='1=1')
-        
-        url = self.services + '/{}/arcgis/rest/services/{}/FeatureServer'.format(org_id, name)
+                            where='1=1',
+                            returnGeometry='true')
 
+        actual_name = name.replace(" ", "%20")
+        url = self.services + '/{}/arcgis/rest/services/{}/FeatureServer'.format(org_id, actual_name)
         item = self.make_request(url, params)
 
         for layer in item['layers']:
-            layer_item_url = self.services + '/{}/arcgis/rest/services/{}/FeatureServer/{}/query'.format(org_id, name, layer['id'])
+            layer_item_url = self.services + '/{}/arcgis/rest/services/{}/FeatureServer/{}/query'.format(org_id, actual_name, layer['id'])
             layer_item = self.make_request(layer_item_url, params_query)
 
             if 'error' in layer_item:
@@ -113,9 +114,9 @@ class AGOL:
                 json_source = os.path.join(json_folder, layer['name'] + ".json")
                 
                 with open(json_source, 'w') as fp:
-                    json_file = json.dump(obj=layer_item, fp=fp, indent=2)
+                    json_file = json.dump(obj=layer_item, fp=fp, indent=4)
 
-                feature_class_name = ''.join(e for e in layer['name'] if e.isalnum())
+                feature_class_name = ''.join(e for e in layer['name'][:25] if e.isalnum())
                 output = os.path.join(service_folder, gdb_name, feature_class_name)
                 arcpy.JSONToFeatures_conversion(json_source, output)
         return 
@@ -124,7 +125,11 @@ class AGOL:
         """Exports all feature layers from ArcGIS Online and saves them in a File Geodatabase"""
         
         items = content['items']
-        
+		
+        for z in items:
+            if z['type'] == "Feature Service" and "Hosted Service" in z['typeKeywords']:
+                arcpy.AddMessage(z['title'])
+				
         for i in items:
             if i['type'] == "Feature Service" and "Hosted Service" in i['typeKeywords']:
                 arcpy.AddMessage("\nSaving " + i['title'])
@@ -137,7 +142,7 @@ class AGOL:
                 json_folder = os.path.join(service_folder, 'json')
                 os.makedirs(json_folder)
                 
-                gdb_name = 'export_' + service + '.gdb'
+                gdb_name = 'export_' + service[:25] + '.gdb'
                 
                 arcpy.CreateFileGDB_management(service_folder, gdb_name, 'CURRENT')
 
@@ -146,9 +151,10 @@ class AGOL:
                 params_query = dict(token=self.token['token'],
                                     f='json',
                                     outFields='*',
-                                    where='1=1')
+                                    where='1=1',
+                                    returnGeometry='true')
                 
-                actual_name = i['url'].split("/")[-2]
+                actual_name = i['url'].split("/")[-2].replace(" ", "%20")
                 url = self.services + '/{}/arcgis/rest/services/{}/FeatureServer'.format(org_id, actual_name)
                 item = self.make_request(url, params)
 
@@ -159,10 +165,11 @@ class AGOL:
                     if 'error' in layer_item:
                         raise Exception(items['error']['message'], items['error']['details'])
                         pass
-                    else:                    
+                    else:
+                        arcpy.AddMessage("converting features...")
                         json_source = os.path.join(json_folder, layer['name'] + ".json")                        
                         with open(json_source, 'w') as fp:
-                            json_file = json.dump(obj=layer_item, fp=fp, indent=2)
+                            json_file = json.dump(obj=layer_item, fp=fp, indent=4)
 
                         feature_class_name = ''.join(e for e in layer['name'] if e.isalnum())
                         output = os.path.join(service_folder, gdb_name, feature_class_name)
@@ -172,7 +179,7 @@ class AGOL:
                     
     def file_writer(self, data, location):
         with open(os.path.join(location, "itemdata-" + timestamp + ".json"), 'w') as fp:
-            json.dump(obj=data, fp=fp, indent=2)
+            json.dump(obj=data, fp=fp, indent=4)
         return
 
 def main():
@@ -197,16 +204,12 @@ def main():
 
     if not batch:
         arcpy.AddMessage("\nBACKUP FEATURE LAYERS")
-        arcpy.AddMessage("=====================")
         agol.export_features_bulk(org_id, agol.get_user_content(), session_location)
     else:
         arcpy.AddMessage("\nEXPORT SINGLE FEATURES")
-        arcpy.AddMessage("======================")
         export = agol.export_features_single(org_id, arcpy.GetParameterAsText(4), session_location)    
 
     arcpy.AddMessage("\nfinished")
-    print "FINISHED"
-
 
 if __name__ == "__main__":
     try:
@@ -215,3 +218,4 @@ if __name__ == "__main__":
         for error in e:
             print error
             arcpy.AddError(error)
+            
