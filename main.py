@@ -127,8 +127,8 @@ class AGOL:
         
         for i in items:
             if i['type'] == "Feature Service" and "Hosted Service" in i['typeKeywords']:
-                arcpy.AddMessage("\nSaving", i['title'])
-                arcpy.AddMessage("URL:", i['url'])
+                arcpy.AddMessage("\nSaving " + i['title'])
+                arcpy.AddMessage("URL: " + i['url'])
                 
                 service = ''.join(e for e in i['title'] if e.isalnum())
                 service_folder = os.path.join(export_loc, service)
@@ -195,7 +195,7 @@ def main():
     content = agol.get_user_content()
     agol.file_writer(content, session_location)
 
-    if batch:
+    if not batch:
         arcpy.AddMessage("\nBACKUP FEATURE LAYERS")
         arcpy.AddMessage("=====================")
         agol.export_features_bulk(org_id, agol.get_user_content(), session_location)
@@ -214,4 +214,4 @@ if __name__ == "__main__":
     except Exception as e:
         for error in e:
             print error
-            arcpy.AddErrpr(error)
+            arcpy.AddError(error)
